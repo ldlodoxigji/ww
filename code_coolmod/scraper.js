@@ -50,7 +50,7 @@ async function parseProducts(html, pageRecord) {
             rating: '',
             unitsSold: '',
             category: 'Coolmod',
-            PageId: pageRecord.id
+            pageId: pageRecord.id
         });
 
         saved++;
@@ -60,27 +60,36 @@ async function parseProducts(html, pageRecord) {
     console.log(`Успешно спарсено товаров: ${saved}`);
 }
 
-async function main() {
+async function scrapeCoolmod(pageRecord) {
+    const url = pageRecord.url || 'https://www.coolmod.com/coolpcs-black/';
+
     console.log('=== Парсинг Coolmod ===');
 
-    const url = 'https://www.coolmod.com/coolpcs-black/';
-
     try {
-        await sequelize.sync();
-
-        const pageRecord = await Page.create({
-            url,
-            html: 'HTML получен через Puppeteer (Coolmod)'
-        });
-
+        await sequelize.ensureDatabase();
         await scrapePageWithPuppeteer(url, pageRecord);
         console.log('Данные сохранены в БД');
 
     } catch (error) {
         console.error('Ошибка:', error.message);
+        throw error;
     }
 
     console.log('=== ЗАВЕРШЕНО ===');
 }
 
-main();
+module.exports = { scrapeCoolmod };
+
+if (require.main === module) {
+    (async () => {
+        const url = 'https://www.coolmod.com/coolpcs-black/';
+        await sequelize.ensureDatabase();
+        const [pageRecord] = await Page.findOrCreate({
+            where: { url },
+            defaults: { html: 'HTML получен через Puppeteer (Coolmod)' }
+        });
+
+        await scrapeCoolmod(pageRecord);
+        await sequelize.closeDatabase();
+    })();
+}
