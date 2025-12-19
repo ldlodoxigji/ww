@@ -8,7 +8,7 @@ const Page = require('../models/Page');
 const ParsedData = require('../models/ParsedData');
 // ==============
 
-async function scrapeStradivarius(url, pageRecord) {
+async function scrapeStradivariusPage(url, pageRecord) {
     console.log('Запускаем браузер для парсинга Stradivarius...');
 
     let browser;
@@ -102,7 +102,7 @@ async function parseStradivariusProducts(html, pageRecord) {
             rating: '',
             unitsSold: '',
             category: 'Stradivarius',
-            PageId: pageRecord.id
+            pageId: pageRecord.id
         });
         // ==========================
 
@@ -126,34 +126,45 @@ function saveToTSV(data, filename) {
     console.log(`Данные сохранены в БД и в файл: ${filename}`);
 }
 
-async function main() {
+async function scrapeStradivarius(pageRecord) {
     console.log('=== Парсинг Stradivarius ===');
     console.log('================================\n');
 
-    const url = 'https://www.stradivarius.com/ic/mujer/ropa/sudaderas-n1989';
+    const url = pageRecord.url || 'https://www.stradivarius.com/ic/mujer/ropa/sudaderas-n1989';
 
     try {
-        await sequelize.sync();
+        await sequelize.ensureDatabase();
 
-        const pageRecord = await Page.create({
-            url,
-            html: 'HTML получен через Puppeteer (Stradivarius)'
-        });
-
-        const products = await scrapeStradivarius(url, pageRecord);
+        const products = await scrapeStradivariusPage(url, pageRecord);
 
         if (products.length === 0) {
             console.log('Данные не получены');
-            return;
+            return products;
         }
 
         saveToTSV(products, 'stradivarius_products.tsv');
+        return products;
 
     } catch (error) {
         console.error('Ошибка:', error.message);
+        throw error;
+    } finally {
+        console.log('\n=== ЗАВЕРШЕНО ===');
     }
-
-    console.log('\n=== ЗАВЕРШЕНО ===');
 }
 
-main();
+module.exports = { scrapeStradivarius: scrapeStradivarius };
+
+if (require.main === module) {
+    (async () => {
+        const url = 'https://www.stradivarius.com/ic/mujer/ropa/sudaderas-n1989';
+        await sequelize.ensureDatabase();
+        const [pageRecord] = await Page.findOrCreate({
+            where: { url },
+            defaults: { html: 'HTML получен через Puppeteer (Stradivarius)' }
+        });
+
+        await scrapeStradivarius(pageRecord);
+        await sequelize.closeDatabase();
+    })();
+}

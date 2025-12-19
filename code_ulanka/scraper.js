@@ -18,91 +18,105 @@ function parseUlankaPrecise(pageRecord) {
     }
   };
 
-  https.get(options, (response) => {
-    let html = '';
+  return new Promise((resolve, reject) => {
+    https.get(options, (response) => {
+      let html = '';
 
-    response.on('data', (chunk) => {
-      html += chunk;
-    });
-
-    response.on('end', async () => {
-      const $ = cheerio.load(html);
-
-      const uniqueLinks = new Set();
-      let productCount = 0;
-
-      // Ищем контейнеры товаров
-      const productContainers = $('div').filter((i, el) => {
-        const $el = $(el);
-        return (
-          $el.find('a[href*="/products/"]').length > 0 &&
-          $el.find('.money').length > 0
-        );
+      response.on('data', (chunk) => {
+        html += chunk;
       });
 
-      console.log(`Найдено потенциальных товаров: ${productContainers.length}`);
+      response.on('end', async () => {
+        try {
+          const $ = cheerio.load(html);
 
-      for (let i = 0; i < productContainers.length; i++) {
-        const container = productContainers[i];
-        const $container = $(container);
+          const uniqueLinks = new Set();
+          let productCount = 0;
 
-        const linkEl = $container.find('a[href*="/products/"]').first();
-        const href = linkEl.attr('href');
-        if (!href || uniqueLinks.has(href)) continue;
+          // Ищем контейнеры товаров
+          const productContainers = $('div').filter((i, el) => {
+            const $el = $(el);
+            return (
+              $el.find('a[href*="/products/"]').length > 0 &&
+              $el.find('.money').length > 0
+            );
+          });
 
-        uniqueLinks.add(href);
+          console.log(`Найдено потенциальных товаров: ${productContainers.length}`);
 
-        const title = linkEl.attr('title') || linkEl.text().trim();
-        const price = $container.find('.money').first().text().trim();
+          for (let i = 0; i < productContainers.length; i++) {
+            const container = productContainers[i];
+            const $container = $(container);
 
-        if (!title || !price) continue;
+            const linkEl = $container.find('a[href*="/products/"]').first();
+            const href = linkEl.attr('href');
+            if (!href || uniqueLinks.has(href)) continue;
 
-        productCount++;
+            uniqueLinks.add(href);
 
-        console.log(`Товар ${productCount}: ${title}`);
-        console.log(`  Цена: ${price}`);
-        console.log(`  Ссылка: https://ulanka.com${href}`);
-        console.log('---');
+            const title = linkEl.attr('title') || linkEl.text().trim();
+            const price = $container.find('.money').first().text().trim();
 
-        // ===== СОХРАНЕНИЕ В БД =====
-        await ParsedData.create({
-          title,
-          price,
-          rating: '',
-          unitsSold: '',
-          category: 'Ulanka',
-          PageId: pageRecord.id
-        });
-        // ==========================
-      }
+            if (!title || !price) continue;
 
-      console.log(`Успешно сохранено товаров: ${productCount}`);
-      console.log('Данные сохранены в БД');
+            productCount++;
+
+            console.log(`Товар ${productCount}: ${title}`);
+            console.log(`  Цена: ${price}`);
+            console.log(`  Ссылка: https://ulanka.com${href}`);
+            console.log('---');
+
+            // ===== СОХРАНЕНИЕ В БД =====
+            await ParsedData.create({
+              title,
+              price,
+              rating: '',
+              unitsSold: '',
+              category: 'Ulanka',
+              pageId: pageRecord.id
+            });
+            // ==========================
+          }
+
+          console.log(`Успешно сохранено товаров: ${productCount}`);
+          console.log('Данные сохранены в БД');
+          resolve(productCount);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }).on('error', (error) => {
+      console.log('Ошибка:', error.message);
+      reject(error);
     });
-  }).on('error', (error) => {
-    console.log('Ошибка:', error.message);
   });
 }
 
-async function main() {
+async function scrapeUlanka(pageRecord) {
   console.log('=== Парсинг Ulanka ===');
   console.log('=====================\n');
 
-  const url = 'https://ulanka.com/en-eu/pages/look-1';
-
   try {
-    await sequelize.sync();
-
-    const pageRecord = await Page.create({
-      url,
-      html: 'HTML получен через HTTPS (Ulanka)'
-    });
-
-    parseUlankaPrecise(pageRecord);
-
+    await sequelize.ensureDatabase();
+    await parseUlankaPrecise(pageRecord);
   } catch (error) {
     console.error('Ошибка:', error.message);
+    throw error;
   }
 }
 
-main();
+module.exports = { scrapeUlanka };
+
+if (require.main === module) {
+  (async () => {
+    const url = 'https://ulanka.com/en-eu/pages/look-1';
+    await sequelize.ensureDatabase();
+    const [pageRecord] = await Page.findOrCreate({
+      where: { url },
+      defaults: { html: 'HTML получен через HTTPS (Ulanka)' }
+    });
+
+    await scrapeUlanka(pageRecord);
+    await sequelize.closeDatabase();
+  })();
+}
