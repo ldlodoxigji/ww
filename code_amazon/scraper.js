@@ -1,8 +1,7 @@
-const fetch = require('node-fetch');
+const fetch = global.fetch || require('node-fetch');
 const cheerio = require('cheerio');
 
 // ===== БД =====
-const sequelize = require('../models');
 const Page = require('../models/Page');
 const ParsedData = require('../models/ParsedData');
 // ==============
@@ -14,7 +13,7 @@ const headers = {
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function parseProductsFromHTML(html, pageId) { // ← добавляем pageId
+async function parseProductsFromHTML(html, pageId) {
     const $ = cheerio.load(html);
     let productsCount = 0;
     let parsedCount = 0;
@@ -45,7 +44,7 @@ async function parseProductsFromHTML(html, pageId) { // ← добавляем p
                     rating: `${(Math.random() * 2 + 3).toFixed(1)}/5`,
                     unitsSold: '',
                     category: 'Bestseller',
-                    PageId: pageId // ← используем переданный pageId
+                    pageId,
                 });
 
                 productsCount++;
@@ -59,11 +58,10 @@ async function parseProductsFromHTML(html, pageId) { // ← добавляем p
     return parsedCount;
 }
 
-async function scrapeAmazon(pageId) { // ← принимаем pageId
+async function scrapeAmazon(pageId) {
     try {
         console.log('=== Парсинг Amazon.es ===');
 
-        // Находим существующую запись Page по ID
         const pageRecord = await Page.findByPk(pageId);
         if (!pageRecord) {
             throw new Error(`Page с ID ${pageId} не найдена`);
@@ -72,7 +70,7 @@ async function scrapeAmazon(pageId) { // ← принимаем pageId
         console.log(`Используем существующую запись Page с ID: ${pageId}`);
 
         await delay(5000);
-        const response = await fetch(pageRecord.url, { headers }); // ← используем URL из записи
+        const response = await fetch(pageRecord.url, { headers });
 
         if (!response.ok) {
             throw new Error(`HTTP ошибка: ${response.status}`);
@@ -89,4 +87,4 @@ async function scrapeAmazon(pageId) { // ← принимаем pageId
     }
 }
 
-module.exports = { scrapeAmazon }; // ← экспорт функции
+module.exports = { scrapeAmazon };

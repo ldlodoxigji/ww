@@ -1,18 +1,18 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('./index');
 
-const Page = sequelize.define('Page', {
-  url: {
+const JobLock = sequelize.define('JobLock', {
+  source: {
     type: DataTypes.STRING,
     allowNull: false,
     unique: true,
   },
-  html: {
-    type: DataTypes.TEXT,
+  lockedAt: {
+    type: DataTypes.DATE,
     allowNull: false,
   },
 }, {
-  timestamps: true,
+  timestamps: false,
 });
 
-module.exports = Page;
+module.exports = JobLock;
